@@ -1,9 +1,11 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import * as mapboxgl from 'mapbox-gl';
+import { ColdObservable } from 'rxjs/internal/testing/ColdObservable';
 
 interface MarcadorColor {
   color : string;
-  marker : mapboxgl.Marker;
+  marker? : mapboxgl.Marker;
+  centro? : [number,number];
 }
 
 @Component({
@@ -30,6 +32,8 @@ export class MarcadoresComponent implements AfterViewInit, OnDestroy {
     this.mapa.off('zoom', ()=>{});
     this.mapa.off('zoomend', ()=>{});
     this.mapa.off('move', ()=>{});
+    this.mapa.off('dragend', ()=>{});
+
 
   }
 
@@ -42,6 +46,8 @@ export class MarcadoresComponent implements AfterViewInit, OnDestroy {
       zoom : this.zoomLevel
     });
 
+
+    this.leerLocalStorage();
     /*
     const markerHtml: HTMLElement = document.createElement('div');
     markerHtml.innerHTML = 'Hola mundo';
@@ -71,15 +77,75 @@ export class MarcadoresComponent implements AfterViewInit, OnDestroy {
       marker : nuevoMarcador,
       color
     });
+
+    this.guardarMarcadoresLocalStorage();
+
+    nuevoMarcador.on('dragend', ()=> {
+      this.guardarMarcadoresLocalStorage();
+    });
+
+
   }
 
   irMarcador( marcador : MarcadorColor ){
       this.mapa.flyTo({
-        center : marcador.marker.getLngLat(),
+        center : marcador.marker!.getLngLat(),
         zoom: 18
       });
   }
 
 
+  guardarMarcadoresLocalStorage(){
+
+    const lngLatArr: MarcadorColor[] = [];
+
+    this.marcadores.forEach( m => {
+      const color = m.color;
+      const { lng, lat } = m.marker!.getLngLat();
+      
+      lngLatArr.push({
+        color : color,
+        centro : [ lng, lat]
+      });
+
+    });
+
+    localStorage.setItem('marcadores', JSON.stringify(lngLatArr))
+  }
+
+
+  leerLocalStorage(){
+    if ( !localStorage.getItem('marcadores') ){
+      return;
+    }
+
+    const lngLatArr: MarcadorColor[] =  JSON.parse(localStorage.getItem('marcadores')!);
+
+    lngLatArr.forEach( m => {
+      
+      const newMarker = new mapboxgl.Marker({
+        draggable: true,
+        color: m.color
+      }).setLngLat(m.centro!).addTo(this.mapa);
+      
+      this.marcadores.push({
+        marker : newMarker,
+        color: m.color
+      });
+
+      newMarker.on('dragend', ()=> {
+        this.guardarMarcadoresLocalStorage();
+      });
+
+    });    
+
+  }
+
+  borrarMarcador(i : number) {
+    console.log( 'Borrando marcador' + i );
+    this.marcadores[i].marker?.remove();
+    this.marcadores.splice(i,1);
+    this.guardarMarcadoresLocalStorage();
+  }
 
 }
